@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Pokémon Blue highlight when selected with the Shield remote -->
+    <item android:state_focused="true">
+        <shape android:shape="rectangle">
+            <solid android:color="#3B4CCA" />
+            <corners android:radius="12dp" />
+        </shape>
+    </item>
+    <!-- Soft Red background when playing but NOT focused -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#FFCCCC" />
+        </shape>
+    </item>
+</selector>

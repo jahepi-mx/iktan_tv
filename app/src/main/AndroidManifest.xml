@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Tell the TV it doesn't need a touch screen -->
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+
+    <!-- Tell the Phone it doesn't need the TV interface -->
+    <uses-feature android:name="android.software.leanback" android:required="false" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="Iktan TV"
+        android:banner="@mipmap/ic_banner"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.AppCompat.NoActionBar">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:screenOrientation="landscape">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <!-- Shows icon on Phone -->
+                <category android:name="android.intent.category.LAUNCHER" />
+
+                <!-- Shows icon on TV -->
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+
+</manifest>

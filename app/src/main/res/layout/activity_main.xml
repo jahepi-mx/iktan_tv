@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#111111"
+    android:orientation="horizontal">
+
+    <!-- Pokédex Red Left Menu -->
+    <ExpandableListView
+        android:id="@+id/season_expandable_list"
+        android:layout_width="320dp"
+        android:layout_height="match_parent"
+        android:background="#FFDE00"
+        android:divider="#D4B500"
+        android:dividerHeight="2dp"
+        android:padding="8dp"
+        android:clipToPadding="false"
+        android:scrollbars="none" />
+
+    <!-- Right Side: Video Player and Controls -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <!-- Pokémon Blue Top Title Bar -->
+        <LinearLayout
+            android:id="@+id/top_controls"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="#3B4CCA"
+            android:gravity="center"
+            android:padding="12dp"
+            android:elevation="4dp">
+
+            <TextView
+                android:id="@+id/video_title_text"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:text="Cargando..."
+                android:textColor="#FFFFFF"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- YouTube Player -->
+        <com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTubePlayerView
+            android:id="@+id/youtube_player_view"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            app:enableAutomaticInitialization="false" />
+
+        <!-- Bottom Controls -->
+        <LinearLayout
+            android:id="@+id/bottom_controls"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:padding="12dp"
+            android:background="#222222">
+
+            <Button
+                android:id="@+id/previous_video_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="16dp"
+                android:backgroundTint="#3B4CCA"
+                android:textColor="#FFFFFF"
+                android:text="Anterior" />
+
+            <Button
+                android:id="@+id/next_video_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="16dp"
+                android:backgroundTint="#3B4CCA"
+                android:textColor="#FFFFFF"
+                android:text="Siguiente" />
+
+            <Button
+                android:id="@+id/fullscreen_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:backgroundTint="#CC0000"
+                android:textColor="#FFFFFF"
+                android:text="Pantalla Completa" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>
