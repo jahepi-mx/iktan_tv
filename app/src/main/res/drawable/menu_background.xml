@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Solid Pikachu Yellow Background -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#FFDE00" />
+        </shape>
+    </item>
+    
+    <!-- Large, semi-transparent Pokeball in the center/bottom -->
+    <item android:gravity="center" android:drawable="@drawable/ic_pokeball_watermark" />
+</layer-list>

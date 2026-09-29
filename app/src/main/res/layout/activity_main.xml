@@ -11,11 +11,13 @@
         android:id="@+id/season_expandable_list"
         android:layout_width="320dp"
         android:layout_height="match_parent"
-        android:background="#FFDE00"
+        android:background="@drawable/menu_background"
         android:divider="#D4B500"
         android:dividerHeight="2dp"
         android:padding="8dp"
         android:clipToPadding="false"
+        android:listSelector="@drawable/list_selector"
+        android:drawSelectorOnTop="true"
         android:scrollbars="none" />
 
     <!-- Right Side: Video Player and Controls -->
@@ -42,7 +44,9 @@
                 android:gravity="center"
                 android:text="Cargando..."
                 android:textColor="#FFFFFF"
-                android:textSize="20sp"
+                android:textSize="24sp"
+                android:padding="4dp"
+                android:letterSpacing="0.05"
                 android:textStyle="bold" />
         </LinearLayout>
 
@@ -64,30 +68,42 @@
             android:padding="12dp"
             android:background="#222222">
 
-            <Button
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/previous_video_button"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginEnd="16dp"
-                android:backgroundTint="#3B4CCA"
+                app:backgroundTint="@color/btn_tint_blue"
+                app:icon="@drawable/ic_skip_previous"
+                app:iconGravity="textStart"
+                app:cornerRadius="16dp"
                 android:textColor="#FFFFFF"
+                android:fontFamily="@font/pokemon_solid"
                 android:text="Anterior" />
 
-            <Button
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/next_video_button"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginEnd="16dp"
-                android:backgroundTint="#3B4CCA"
+                app:backgroundTint="@color/btn_tint_blue"
+                app:icon="@drawable/ic_skip_next"
+                app:iconGravity="textEnd"
+                app:cornerRadius="16dp"
                 android:textColor="#FFFFFF"
+                android:fontFamily="@font/pokemon_solid"
                 android:text="Siguiente" />
 
-            <Button
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/fullscreen_button"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:backgroundTint="#CC0000"
+                app:backgroundTint="@color/btn_tint_red"
+                app:icon="@drawable/ic_fullscreen"
+                app:iconGravity="textStart"
+                app:cornerRadius="16dp"
                 android:textColor="#FFFFFF"
+                android:fontFamily="@font/pokemon_solid"
                 android:text="Pantalla Completa" />
         </LinearLayout>
     </LinearLayout>
