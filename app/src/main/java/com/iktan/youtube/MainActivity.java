@@ -5,6 +5,8 @@ import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
@@ -16,6 +18,7 @@ import androidx.webkit.WebViewFeature;
 import android.widget.BaseExpandableListAdapter;
 import android.widget.ExpandableListView;
 import android.widget.TextView;
+import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -46,6 +49,15 @@ public class MainActivity extends AppCompatActivity {
     // Spanish audio auto-selection
     private static final String TAG = "IktanAudio";
     private WebView playerWebView;
+
+    // Remote control / playback state
+    private static final float SEEK_SECONDS = 10f;
+    private static final int MAX_CONSECUTIVE_ERRORS = 5;
+    private final Handler uiHandler = new Handler(Looper.getMainLooper());
+    private boolean isPlaying = false;
+    private float currentSecond = 0f;
+    private int consecutiveErrors = 0;
+    private long lastBackPressTime = 0;
 
     // Injected directly INTO the YouTube embed iframe (https://www.youtube.com) at document start.
     // The library page runs on https://com.iktan.youtube, so it can't reach the iframe itself;
@@ -149,6 +161,9 @@ public class MainActivity extends AppCompatActivity {
             return true;
         });
 
+        // Open the menu on the episode that is currently playing
+        focusCurrentEpisode();
+
         // 3. Setup the Player
         YouTubePlayerView youTubePlayerView = findViewById(R.id.youtube_player_view);
         getLifecycle().addObserver(youTubePlayerView);
@@ -168,7 +183,21 @@ public class MainActivity extends AppCompatActivity {
             }
             @Override
             public void onStateChange(@NonNull YouTubePlayer youTubePlayer, @NonNull PlayerConstants.PlayerState state) {
+                isPlaying = state == PlayerConstants.PlayerState.PLAYING;
+                if (isPlaying) consecutiveErrors = 0;
                 if (state == PlayerConstants.PlayerState.ENDED) playNextVideo();
+            }
+            @Override
+            public void onCurrentSecond(@NonNull YouTubePlayer youTubePlayer, float second) {
+                currentSecond = second;
+            }
+            @Override
+            public void onError(@NonNull YouTubePlayer youTubePlayer, @NonNull PlayerConstants.PlayerError error) {
+                // Removed/blocked video: skip to the next one, but stop if many fail in a row (e.g. no internet)
+                Log.w(TAG, "Player error " + error + " on " + videoIds.get(currentIndex));
+                if (++consecutiveErrors <= MAX_CONSECUTIVE_ERRORS) {
+                    uiHandler.postDelayed(MainActivity.this::playNextVideo, 2000);
+                }
             }
         }, true, iFramePlayerOptions);
 
@@ -188,6 +217,8 @@ public class MainActivity extends AppCompatActivity {
 
     private void playCurrentVideo() {
         if (videoIds.isEmpty() || youTubePlayer == null) return;
+        uiHandler.removeCallbacksAndMessages(null);
+        currentSecond = 0f;
         youTubePlayer.loadVideo(videoIds.get(currentIndex), 0f);
         videoTitleText.setText(videoTitles.get(currentIndex));
 
@@ -211,6 +242,63 @@ public class MainActivity extends AppCompatActivity {
         if (videoIds.isEmpty() || youTubePlayer == null) return;
         currentIndex = (currentIndex - 1 < 0) ? videoIds.size() - 1 : currentIndex - 1;
         playCurrentVideo();
+    }
+
+    // Expands the current episode's season and puts the remote's highlight on that episode
+    private void focusCurrentEpisode() {
+        ExpandableListView list = findViewById(R.id.season_expandable_list);
+        for (int g = 0; g < seasonGroups.size(); g++) {
+            List<VideoItem> episodes = seasonEpisodesMap.get(seasonGroups.get(g));
+            for (int c = 0; c < episodes.size(); c++) {
+                if (episodes.get(c).globalIndex == currentIndex) {
+                    final int group = g, child = c;
+                    list.post(() -> {
+                        list.expandGroup(group);
+                        list.setSelectedChild(group, child, true);
+                        list.requestFocus();
+                    });
+                    return;
+                }
+            }
+        }
+    }
+
+    // Lets the remote's media buttons control the video no matter where the highlight is
+    private boolean handleMediaKey(KeyEvent event) {
+        int code = event.getKeyCode();
+        boolean isMediaKey = code == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE || code == KeyEvent.KEYCODE_MEDIA_PLAY
+                || code == KeyEvent.KEYCODE_MEDIA_PAUSE || code == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD
+                || code == KeyEvent.KEYCODE_MEDIA_REWIND || code == KeyEvent.KEYCODE_MEDIA_NEXT
+                || code == KeyEvent.KEYCODE_MEDIA_PREVIOUS;
+        if (!isMediaKey) return false;
+        if (youTubePlayer == null || event.getAction() != KeyEvent.ACTION_DOWN) return true;
+
+        switch (code) {
+            case KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE:
+                if (isPlaying) youTubePlayer.pause(); else youTubePlayer.play();
+                break;
+            case KeyEvent.KEYCODE_MEDIA_PLAY:
+                youTubePlayer.play();
+                break;
+            case KeyEvent.KEYCODE_MEDIA_PAUSE:
+                youTubePlayer.pause();
+                break;
+            case KeyEvent.KEYCODE_MEDIA_FAST_FORWARD:
+                currentSecond += SEEK_SECONDS;
+                youTubePlayer.seekTo(currentSecond);
+                break;
+            case KeyEvent.KEYCODE_MEDIA_REWIND:
+                currentSecond = Math.max(0f, currentSecond - SEEK_SECONDS);
+                youTubePlayer.seekTo(currentSecond);
+                break;
+            case KeyEvent.KEYCODE_MEDIA_NEXT:
+                if (event.getRepeatCount() == 0) playNextVideo();
+                break;
+            case KeyEvent.KEYCODE_MEDIA_PREVIOUS:
+                if (event.getRepeatCount() == 0) playPreviousVideo();
+                break;
+        }
+        return true;
     }
 
     // Registers SPANISH_AUDIO_JS to run inside every https://www.youtube.com frame of the player WebView
@@ -253,6 +341,7 @@ public class MainActivity extends AppCompatActivity {
     // so YouTube's settings menu items can't be selected. Translate it to ENTER.
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
+        if (handleMediaKey(event)) return true;
         int code = event.getKeyCode();
         if (code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_BUTTON_A) {
             View focused = getCurrentFocus();
@@ -277,6 +366,11 @@ public class MainActivity extends AppCompatActivity {
             topControls.setVisibility(View.VISIBLE);
             bottomControls.setVisibility(View.VISIBLE);
             leftMenu.setVisibility(View.VISIBLE);
+            focusCurrentEpisode();
+        } else if (System.currentTimeMillis() - lastBackPressTime > 2000) {
+            // Avoid closing the app by accident: require a second Back press within 2 seconds
+            lastBackPressTime = System.currentTimeMillis();
+            Toast.makeText(this, "Presiona Atrás otra vez para salir", Toast.LENGTH_SHORT).show();
         } else {
             super.onBackPressed();
         }
