@@ -5,8 +5,14 @@ import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.os.Bundle;
+import android.util.Log;
+import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.webkit.JavascriptInterface;
+import android.webkit.WebView;
+import androidx.webkit.WebViewCompat;
+import androidx.webkit.WebViewFeature;
 import android.widget.BaseExpandableListAdapter;
 import android.widget.ExpandableListView;
 import android.widget.TextView;
@@ -25,15 +31,56 @@ import org.json.JSONObject;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 public class MainActivity extends AppCompatActivity {
 
     private YouTubePlayer youTubePlayer = null;
     private TextView videoTitleText;
     private SeasonAdapter seasonAdapter;
+
+    // Spanish audio auto-selection
+    private static final String TAG = "IktanAudio";
+    private WebView playerWebView;
+
+    // Injected directly INTO the YouTube embed iframe (https://www.youtube.com) at document start.
+    // The library page runs on https://com.iktan.youtube, so it can't reach the iframe itself;
+    // this script runs inside the iframe and calls the internal player's setAudioTrack().
+    private static final String SPANISH_AUDIO_JS =
+            "(function(){" +
+            "if(window.__iktanEs)return;window.__iktanEs=true;" +
+            "if(location.pathname.indexOf('/embed/')!==0)return;" +
+            "function log(m){try{IktanAudioBridge.log(m);}catch(e){console.log('IktanAudio '+m);}}" +
+            "function info(t){var s='';if(!t)return s;" +
+            " try{if(t.getLanguageInfo){var li=t.getLanguageInfo();s+=' '+(li.getId?li.getId():'')+' '+(li.getName?li.getName():'');}}catch(e){}" +
+            " try{for(var k in t){var v=t[k];if(typeof v==='string')s+=' '+v;" +
+            "  else if(v&&typeof v==='object'&&!Array.isArray(v)){var sub='',cap=false;" +
+            "   for(var k2 in v){var w=v[k2];if(typeof w==='string'){if(w.indexOf('timedtext')>=0||w.indexOf('caption')>=0)cap=true;sub+=' '+w;}}" +
+            "   if(!cap)s+=sub;}}}catch(e){}" +
+            " return s.toLowerCase();}" +
+            "function isEs(s){return /(^|[^a-z])es([-_.][a-z0-9]+)?([^a-z]|$)/.test(s)||s.indexOf('espa')>=0||s.indexOf('spanish')>=0;}" +
+            "var lastVid=null,tries=0;" +
+            "setInterval(function(){try{" +
+            " var p=document.getElementById('movie_player')||document.querySelector('.html5-video-player');" +
+            " if(!p||!p.getAvailableAudioTracks)return;" +
+            " var vid='';try{vid=p.getVideoData().video_id;}catch(e){}" +
+            " if(vid!==lastVid){lastVid=vid;tries=0;}" +
+            " if(tries<0||tries>20)return;" +
+            " var tracks=p.getAvailableAudioTracks()||[];if(!tracks.length)return;" +
+            " tries++;" +
+            " if(tries===1){var dump=[];for(var d=0;d<tracks.length;d++)dump.push(info(tracks[d]));log('tracks '+vid+' ('+tracks.length+'): '+dump.join(' || '));}" +
+            " var cur=null;try{cur=p.getAudioTrack&&p.getAudioTrack();}catch(e){}" +
+            " if(cur&&isEs(info(cur))){log('already spanish '+vid+':'+info(cur));tries=-1;return;}" +
+            " var best=null;for(var i=0;i<tracks.length;i++){var s=info(tracks[i]);" +
+            "  if(isEs(s)){if(s.indexOf('419')>=0||s.indexOf('latin')>=0){best=tracks[i];break;}if(!best)best=tracks[i];}}" +
+            " if(!best){var all=[];for(var j=0;j<tracks.length;j++)all.push(info(tracks[j]));log('nospanish '+vid+':'+all.join(' | '));tries=-1;return;}" +
+            " p.setAudioTrack(best);log('set '+vid+':'+info(best));" +
+            "}catch(e){log('error '+e);}},1000);" +
+            "})();";
 
     // Flat lists for playback
     private List<String> videoIds = new ArrayList<>();
@@ -55,14 +102,17 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        // Force the app's language to Spanish (Mexico) for audio track prioritization
-        Locale locale = new Locale("es", "MX");
+    protected void attachBaseContext(android.content.Context newBase) {
+        // Force the app's language to Spanish (Mexico) properly for WebViews on Android 7+
+        Locale locale = new Locale("es", "ES");
         Locale.setDefault(locale);
         Configuration config = new Configuration();
         config.setLocale(locale);
-        getResources().updateConfiguration(config, getResources().getDisplayMetrics());
+        super.attachBaseContext(newBase.createConfigurationContext(config));
+    }
 
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
@@ -104,7 +154,11 @@ public class MainActivity extends AppCompatActivity {
         getLifecycle().addObserver(youTubePlayerView);
 
         IFramePlayerOptions iFramePlayerOptions = new IFramePlayerOptions.Builder(getApplicationContext())
-                .controls(1).build();
+                .controls(1)
+                .build();
+
+        // Must be registered BEFORE initialize() so it applies to the YouTube iframe when it loads
+        installSpanishAudioScript(youTubePlayerView);
 
         youTubePlayerView.initialize(new AbstractYouTubePlayerListener() {
             @Override
@@ -157,6 +211,60 @@ public class MainActivity extends AppCompatActivity {
         if (videoIds.isEmpty() || youTubePlayer == null) return;
         currentIndex = (currentIndex - 1 < 0) ? videoIds.size() - 1 : currentIndex - 1;
         playCurrentVideo();
+    }
+
+    // Registers SPANISH_AUDIO_JS to run inside every https://www.youtube.com frame of the player WebView
+    private void installSpanishAudioScript(View youTubePlayerView) {
+        playerWebView = findWebView(youTubePlayerView);
+        if (playerWebView == null) {
+            Log.w(TAG, "Player WebView not found");
+            return;
+        }
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+            Log.w(TAG, "DOCUMENT_START_SCRIPT not supported; update Android System WebView");
+            return;
+        }
+        // JS interfaces are exposed to iframes too, so the script can log back to Logcat
+        playerWebView.addJavascriptInterface(new Object() {
+            @JavascriptInterface
+            public void log(String message) { Log.d(TAG, message); }
+        }, "IktanAudioBridge");
+
+        Set<String> origins = new HashSet<>();
+        origins.add("https://www.youtube.com");
+        WebViewCompat.addDocumentStartJavaScript(playerWebView, SPANISH_AUDIO_JS, origins);
+        Log.d(TAG, "Spanish audio script installed");
+    }
+
+    // The library hides its WebView inside YouTubePlayerView, so search the hierarchy for it
+    private WebView findWebView(View view) {
+        if (view instanceof WebView) return (WebView) view;
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                WebView found = findWebView(group.getChildAt(i));
+                if (found != null) return found;
+            }
+        }
+        return null;
+    }
+
+    // The Shield remote's OK button (DPAD_CENTER) isn't treated as a click by the WebView,
+    // so YouTube's settings menu items can't be selected. Translate it to ENTER.
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        int code = event.getKeyCode();
+        if (code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_BUTTON_A) {
+            View focused = getCurrentFocus();
+            if (focused instanceof WebView) {
+                KeyEvent enter = new KeyEvent(event.getDownTime(), event.getEventTime(),
+                        event.getAction(), KeyEvent.KEYCODE_ENTER, event.getRepeatCount(),
+                        event.getMetaState(), event.getDeviceId(), event.getScanCode(),
+                        event.getFlags(), event.getSource());
+                return focused.dispatchKeyEvent(enter);
+            }
+        }
+        return super.dispatchKeyEvent(event);
     }
 
     @Override
