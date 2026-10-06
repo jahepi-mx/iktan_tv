@@ -447,7 +447,7 @@ public class MainActivity extends AppCompatActivity {
 
     // Maps the flat JSON items into their respective Seasons
     private void buildSeasonData() {
-        int[] boundaries = {0, 52, 112, 153, 205, 269, 316, 368, 420, 467, 513};
+        int[] boundaries = {0, 52, 112, 153, 205, 269, 316, 368, 420, 467, 518};
 
         for (int i = 0; i < 10; i++) {
             String seasonName = "Temporada " + (i + 1);
