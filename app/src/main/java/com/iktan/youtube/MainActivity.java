@@ -58,6 +58,7 @@ public class MainActivity extends AppCompatActivity {
     private float currentSecond = 0f;
     private int consecutiveErrors = 0;
     private long lastBackPressTime = 0;
+    private long lastProgressSaveTime = 0;
 
     // Injected directly INTO the YouTube embed iframe (https://www.youtube.com) at document start.
     // The library page runs on https://com.iktan.youtube, so it can't reach the iframe itself;
@@ -187,11 +188,23 @@ public class MainActivity extends AppCompatActivity {
             public void onStateChange(@NonNull YouTubePlayer youTubePlayer, @NonNull PlayerConstants.PlayerState state) {
                 isPlaying = state == PlayerConstants.PlayerState.PLAYING;
                 if (isPlaying) consecutiveErrors = 0;
-                if (state == PlayerConstants.PlayerState.ENDED) playNextVideo();
+                if (state == PlayerConstants.PlayerState.ENDED) {
+                    SharedPreferences.Editor editor = getPreferences(MODE_PRIVATE).edit();
+                    editor.putFloat("progress_" + videoIds.get(currentIndex), 0f);
+                    editor.apply();
+                    playNextVideo();
+                }
             }
             @Override
             public void onCurrentSecond(@NonNull YouTubePlayer youTubePlayer, float second) {
                 currentSecond = second;
+                long now = System.currentTimeMillis();
+                if (now - lastProgressSaveTime > 5000) {
+                    lastProgressSaveTime = now;
+                    SharedPreferences.Editor editor = getPreferences(MODE_PRIVATE).edit();
+                    editor.putFloat("progress_" + videoIds.get(currentIndex), currentSecond);
+                    editor.apply();
+                }
             }
             @Override
             public void onError(@NonNull YouTubePlayer youTubePlayer, @NonNull PlayerConstants.PlayerError error) {
@@ -220,12 +233,17 @@ public class MainActivity extends AppCompatActivity {
     private void playCurrentVideo() {
         if (videoIds.isEmpty() || youTubePlayer == null) return;
         uiHandler.removeCallbacksAndMessages(null);
-        currentSecond = 0f;
-        youTubePlayer.loadVideo(videoIds.get(currentIndex), 0f);
+        
+        SharedPreferences prefs = getPreferences(MODE_PRIVATE);
+        String videoId = videoIds.get(currentIndex);
+        float savedProgress = prefs.getFloat("progress_" + videoId, 0f);
+        
+        currentSecond = savedProgress;
+        youTubePlayer.loadVideo(videoId, savedProgress);
         videoTitleText.setText(videoTitles.get(currentIndex));
 
         // Save the progress instantly whenever a video starts
-        SharedPreferences.Editor editor = getPreferences(MODE_PRIVATE).edit();
+        SharedPreferences.Editor editor = prefs.edit();
         editor.putInt("last_watched_episode", currentIndex);
         editor.apply();
 
@@ -339,23 +357,56 @@ public class MainActivity extends AppCompatActivity {
         return null;
     }
 
-    // The Shield remote's OK button (DPAD_CENTER) isn't treated as a click by the WebView,
-    // so YouTube's settings menu items can't be selected. Translate it to ENTER.
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (handleMediaKey(event)) return true;
+        
         int code = event.getKeyCode();
-        if (code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_BUTTON_A) {
-            View focused = getCurrentFocus();
-            if (focused instanceof WebView) {
-                KeyEvent enter = new KeyEvent(event.getDownTime(), event.getEventTime(),
-                        event.getAction(), KeyEvent.KEYCODE_ENTER, event.getRepeatCount(),
-                        event.getMetaState(), event.getDeviceId(), event.getScanCode(),
-                        event.getFlags(), event.getSource());
-                return focused.dispatchKeyEvent(enter);
+        boolean isActionDown = event.getAction() == KeyEvent.ACTION_DOWN;
+
+        View topControls = findViewById(R.id.top_controls);
+        boolean isFullScreen = (topControls != null && topControls.getVisibility() == View.GONE);
+        
+        if (isFullScreen) {
+            if (isActionDown) {
+                switch (code) {
+                    case KeyEvent.KEYCODE_DPAD_CENTER:
+                    case KeyEvent.KEYCODE_BUTTON_A:
+                    case KeyEvent.KEYCODE_ENTER:
+                        if (isPlaying) youTubePlayer.pause(); else youTubePlayer.play();
+                        return true;
+                    case KeyEvent.KEYCODE_DPAD_LEFT:
+                        currentSecond = Math.max(0f, currentSecond - SEEK_SECONDS);
+                        youTubePlayer.seekTo(currentSecond);
+                        return true;
+                    case KeyEvent.KEYCODE_DPAD_RIGHT:
+                        currentSecond += SEEK_SECONDS;
+                        youTubePlayer.seekTo(currentSecond);
+                        return true;
+                    case KeyEvent.KEYCODE_DPAD_UP:
+                    case KeyEvent.KEYCODE_DPAD_DOWN:
+                        return true;
+                }
+            } else {
+                if (code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_BUTTON_A || code == KeyEvent.KEYCODE_ENTER ||
+                    code == KeyEvent.KEYCODE_DPAD_LEFT || code == KeyEvent.KEYCODE_DPAD_RIGHT ||
+                    code == KeyEvent.KEYCODE_DPAD_UP || code == KeyEvent.KEYCODE_DPAD_DOWN) {
+                    return true;
+                }
             }
         }
+        
         return super.dispatchKeyEvent(event);
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        if (!videoIds.isEmpty()) {
+            SharedPreferences.Editor editor = getPreferences(MODE_PRIVATE).edit();
+            editor.putFloat("progress_" + videoIds.get(currentIndex), currentSecond);
+            editor.apply();
+        }
     }
 
     @Override
