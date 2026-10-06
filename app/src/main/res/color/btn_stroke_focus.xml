@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Thick Pokémon-yellow border only while the button is selected with the remote -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_focused="true" android:color="#FFCB05" />
+    <item android:color="@android:color/transparent" />
+</selector>
