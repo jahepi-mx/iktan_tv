@@ -79,6 +79,8 @@ public class MainActivity extends AppCompatActivity {
             "setInterval(function(){try{" +
             " var p=document.getElementById('movie_player')||document.querySelector('.html5-video-player');" +
             " if(!p||!p.getAvailableAudioTracks)return;" +
+            " try{var ct=p.getOption&&p.getOption('captions','track');" +
+            "  if(ct&&ct.languageCode){p.setOption('captions','track',{});if(p.unloadModule){p.unloadModule('captions');p.unloadModule('cc');}log('captions off '+ct.languageCode);}}catch(e){}" +
             " var vid='';try{vid=p.getVideoData().video_id;}catch(e){}" +
             " if(vid!==lastVid){lastVid=vid;tries=0;}" +
             " if(tries<0||tries>20)return;" +
